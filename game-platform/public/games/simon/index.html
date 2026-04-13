@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Simon Says</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: linear-gradient(135deg, #1a0033, #2d0050, #0d0033);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+  }
+  .game-container {
+    position: relative;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 0 40px rgba(155, 89, 182, 0.3), inset 0 0 20px rgba(155, 89, 182, 0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    width: 100%;
+    padding: 0 10px;
+  }
+  .round-display, .high-score {
+    color: #fff;
+    font-size: 18px;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  }
+  .round-display span { color: #9b59b6; font-weight: bold; }
+  .high-score span { color: #ffd93d; }
+  
+  .simon-board {
+    position: relative;
+    width: 300px;
+    height: 300px;
+  }
+  .simon-btn {
+    position: absolute;
+    width: 130px;
+    height: 130px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    opacity: 0.7;
+  }
+  .simon-btn:active, .simon-btn.active {
+    opacity: 1;
+    transform: scale(0.95);
+  }
+  .simon-btn.green {
+    top: 0; left: 0;
+    background: linear-gradient(135deg, #00b894, #00cec9);
+    border-radius: 100% 15px 15px 15px;
+    box-shadow: 0 0 20px rgba(0, 184, 148, 0.4);
+  }
+  .simon-btn.green.active, .simon-btn.green.lit {
+    background: linear-gradient(135deg, #55efc4, #81ecec);
+    box-shadow: 0 0 40px rgba(0, 184, 148, 0.8);
+    opacity: 1;
+  }
+  .simon-btn.red {
+    top: 0; right: 0;
+    background: linear-gradient(135deg, #e17055, #d63031);
+    border-radius: 15px 100% 15px 15px;
+    box-shadow: 0 0 20px rgba(225, 112, 85, 0.4);
+  }
+  .simon-btn.red.active, .simon-btn.red.lit {
+    background: linear-gradient(135deg, #fab1a0, #ff7675);
+    box-shadow: 0 0 40px rgba(225, 112, 85, 0.8);
+    opacity: 1;
+  }
+  .simon-btn.yellow {
+    bottom: 0; left: 0;
+    background: linear-gradient(135deg, #fdcb6e, #f39c12);
+    border-radius: 15px 15px 15px 100%;
+    box-shadow: 0 0 20px rgba(253, 203, 110, 0.4);
+  }
+  .simon-btn.yellow.active, .simon-btn.yellow.lit {
+    background: linear-gradient(135deg, #ffeaa7, #fdcb6e);
+    box-shadow: 0 0 40px rgba(253, 203, 110, 0.8);
+    opacity: 1;
+  }
+  .simon-btn.blue {
+    bottom: 0; right: 0;
+    background: linear-gradient(135deg, #74b9ff, #0984e3);
+    border-radius: 15px 15px 100% 15px;
+    box-shadow: 0 0 20px rgba(116, 185, 255, 0.4);
+  }
+  .simon-btn.blue.active, .simon-btn.blue.lit {
+    background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+    box-shadow: 0 0 40px rgba(116, 185, 255, 0.8);
+    opacity: 1;
+  }
+  
+  .center-circle {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #2d0050, #1a0033);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    z-index: 5;
+  }
+  .center-text {
+    color: #fff;
+    font-size: 14px;
+    text-align: center;
+  }
+  
+  .status {
+    margin-top: 20px;
+    color: #b8b8d4;
+    font-size: 16px;
+    text-align: center;
+    min-height: 24px;
+  }
+  
+  .overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .overlay.hidden { display: none; }
+  .overlay h1 {
+    font-size: 42px;
+    background: linear-gradient(45deg, #9b59b6, #e74c3c, #ffd93d, #00b894);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient 3s ease infinite;
+    margin-bottom: 15px;
+  }
+  @keyframes gradient {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  .overlay p { color: #b8b8d4; font-size: 16px; margin-bottom: 10px; text-align: center; padding: 0 20px; }
+  .btn {
+    background: linear-gradient(135deg, #9b59b6, #e74c3c);
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    font-size: 20px;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 20px rgba(155, 89, 182, 0.4);
+    margin-top: 15px;
+  }
+  .btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(155, 89, 182, 0.6);
+  }
+  .final-score { color: #9b59b6; font-size: 28px; margin: 15px 0; }
+</style>
+</head>
+<body>
+<div class="game-container">
+  <div class="header">
+    <div class="round-display">Round: <span id="round">0</span></div>
+    <div class="high-score">Best: <span id="highScore">0</span></div>
+  </div>
+  
+  <div class="simon-board">
+    <button class="simon-btn green" data-color="0"></button>
+    <button class="simon-btn red" data-color="1"></button>
+    <button class="simon-btn yellow" data-color="2"></button>
+    <button class="simon-btn blue" data-color="3"></button>
+    <div class="center-circle">
+      <div class="center-text" id="centerText">SIMON</div>
+    </div>
+  </div>
+  
+  <div class="status" id="status">Watch the sequence, then repeat it!</div>
+  
+  <div class="overlay" id="startScreen">
+    <h1>SIMON SAYS</h1>
+    <p>Watch the sequence and repeat it back</p>
+    <p>Each round adds one more step!</p>
+    <button class="btn" id="startBtn">START GAME</button>
+  </div>
+  
+  <div class="overlay hidden" id="gameOverScreen">
+    <h1>GAME OVER</h1>
+    <div class="final-score">You reached Round <span id="finalRound">0</span></div>
+    <button class="btn" id="restartBtn">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script>
+const roundEl = document.getElementById('round');
+const highScoreEl = document.getElementById('highScore');
+const statusEl = document.getElementById('status');
+const centerText = document.getElementById('centerText');
+const startScreen = document.getElementById('startScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+const finalRoundEl = document.getElementById('finalRound');
+const buttons = document.querySelectorAll('.simon-btn');
+
+let highScore = parseInt(localStorage.getItem('simonHighScore')) || 0;
+highScoreEl.textContent = highScore;
+
+const COLORS = ['green', 'red', 'yellow', 'blue'];
+const FREQS = [261.63, 329.63, 392.00, 523.25];
+
+let sequence = [], playerSequence = [], round = 0;
+let gameRunning, showingSequence, audioCtx;
+
+function getAudioContext() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playTone(freq, duration = 300) {
+  try {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration / 1000);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration / 1000);
+  } catch (e) {}
+}
+
+function playErrorTone() {
+  try {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 150;
+    osc.type = 'sawtooth';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch (e) {}
+}
+
+function lightButton(index, duration = 500) {
+  const btn = buttons[index];
+  btn.classList.add('lit');
+  playTone(FREQS[index], duration);
+  setTimeout(() => btn.classList.remove('lit'), duration);
+}
+
+async function showSequence() {
+  showingSequence = true;
+  statusEl.textContent = 'Watch carefully...';
+  centerText.textContent = '...';
+  
+  await new Promise(r => setTimeout(r, 500));
+  
+  for (let i = 0; i < sequence.length; i++) {
+    if (!gameRunning) return;
+    lightButton(sequence[i], 400);
+    await new Promise(r => setTimeout(r, 600));
+  }
+  
+  showingSequence = false;
+  playerSequence = [];
+  statusEl.textContent = 'Your turn! Repeat the sequence.';
+  centerText.textContent = 'GO!';
+}
+
+function nextRound() {
+  round++;
+  roundEl.textContent = round;
+  sequence.push(Math.floor(Math.random() * 4));
+  showSequence();
+}
+
+function handleInput(index) {
+  if (!gameRunning || showingSequence) return;
+  
+  lightButton(index, 200);
+  playerSequence.push(index);
+  
+  const currentIdx = playerSequence.length - 1;
+  
+  if (playerSequence[currentIdx] !== sequence[currentIdx]) {
+    gameOver();
+    return;
+  }
+  
+  if (playerSequence.length === sequence.length) {
+    centerText.textContent = 'OK!';
+    statusEl.textContent = 'Correct! Get ready for next round...';
+    setTimeout(nextRound, 1000);
+  }
+}
+
+function gameOver() {
+  gameRunning = false;
+  playErrorTone();
+  
+  buttons.forEach(btn => {
+    btn.classList.add('lit');
+  });
+  setTimeout(() => buttons.forEach(btn => btn.classList.remove('lit')), 500);
+  
+  if (round > highScore) {
+    highScore = round;
+    localStorage.setItem('simonHighScore', highScore);
+    highScoreEl.textContent = highScore;
+  }
+  
+  statusEl.textContent = 'Wrong sequence!';
+  centerText.textContent = 'X';
+  
+  setTimeout(() => {
+    finalRoundEl.textContent = round;
+    gameOverScreen.classList.remove('hidden');
+    window.parent.postMessage({ type: 'gameOver', score: round, highScore }, '*');
+  }, 500);
+}
+
+buttons.forEach((btn, index) => {
+  btn.addEventListener('click', () => handleInput(index));
+  btn.addEventListener('touchstart', e => { e.preventDefault(); handleInput(index); }, { passive: false });
+});
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  startScreen.classList.add('hidden');
+  sequence = [];
+  playerSequence = [];
+  round = 0;
+  roundEl.textContent = '0';
+  gameRunning = true;
+  nextRound();
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+  gameOverScreen.classList.add('hidden');
+  sequence = [];
+  playerSequence = [];
+  round = 0;
+  roundEl.textContent = '0';
+  gameRunning = true;
+  nextRound();
+});
+</script>
+</body>
+</html>

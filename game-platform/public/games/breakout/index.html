@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Breakout</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: linear-gradient(135deg, #1a0033, #330066, #0d0033);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    touch-action: none;
+  }
+  .game-container {
+    position: relative;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 0 40px rgba(138, 43, 226, 0.3), inset 0 0 20px rgba(138, 43, 226, 0.1);
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding: 0 10px;
+  }
+  .score-display, .lives-display, .high-score {
+    color: #fff;
+    font-size: 18px;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  }
+  .score-display span, .lives-display span, .high-score span {
+    color: #ff6b6b;
+    font-weight: bold;
+  }
+  .high-score span { color: #ffd93d; }
+  canvas {
+    display: block;
+    background: linear-gradient(180deg, #0a0a2e 0%, #1a0a3e 100%);
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(138, 43, 226, 0.4);
+    cursor: none;
+  }
+  .overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .overlay.hidden { display: none; }
+  .overlay h1 {
+    font-size: 48px;
+    background: linear-gradient(45deg, #ff6b6b, #ff8e53, #ffd93d, #6bcb77, #4d96ff, #ff6b6b);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient 3s ease infinite;
+    margin-bottom: 20px;
+  }
+  @keyframes gradient {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  .overlay p {
+    color: #b8b8d4;
+    font-size: 18px;
+    margin-bottom: 30px;
+  }
+  .btn {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    font-size: 20px;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+  }
+  .btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+  }
+  .final-score {
+    color: #ffd93d;
+    font-size: 28px;
+    margin-bottom: 20px;
+  }
+</style>
+</head>
+<body>
+<div class="game-container">
+  <div class="header">
+    <div class="score-display">Score: <span id="score">0</span></div>
+    <div class="high-score">High: <span id="highScore">0</span></div>
+    <div class="lives-display">Lives: <span id="lives">3</span></div>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  
+  <div class="overlay" id="startScreen">
+    <h1>NEON BREAKOUT</h1>
+    <p>Destroy all bricks to win!</p>
+    <button class="btn" id="startBtn">START GAME</button>
+  </div>
+  
+  <div class="overlay hidden" id="gameOverScreen">
+    <h1 id="gameOverTitle">GAME OVER</h1>
+    <div class="final-score">Score: <span id="finalScore">0</span></div>
+    <button class="btn" id="restartBtn">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = Math.min(600, window.innerWidth - 60);
+const H = Math.min(700, window.innerHeight - 150);
+canvas.width = W;
+canvas.height = H;
+
+const scoreEl = document.getElementById('score');
+const livesEl = document.getElementById('lives');
+const highScoreEl = document.getElementById('highScore');
+const startScreen = document.getElementById('startScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+const finalScoreEl = document.getElementById('finalScore');
+const gameOverTitle = document.getElementById('gameOverTitle');
+
+let highScore = parseInt(localStorage.getItem('breakoutHighScore')) || 0;
+highScoreEl.textContent = highScore;
+
+const BRICK_ROWS = 7;
+const BRICK_COLS = 9;
+const BRICK_W = (W - 40) / BRICK_COLS;
+const BRICK_H = 25;
+const PADDLE_W = Math.min(100, W / 6);
+const PADDLE_H = 15;
+const BALL_R = 8;
+
+const COLORS = ['#ff6b6b', '#ff8e53', '#ffd93d', '#6bcb77', '#4d96ff', '#9b59b6', '#e74c3c'];
+
+let paddle, ball, bricks, particles, score, lives, gameRunning, animationId;
+
+function init() {
+  paddle = { x: W / 2 - PADDLE_W / 2, y: H - 40, w: PADDLE_W, h: PADDLE_H };
+  ball = { x: W / 2, y: H - 60, dx: 4, dy: -4, r: BALL_R };
+  particles = [];
+  score = 0;
+  lives = 3;
+  scoreEl.textContent = score;
+  livesEl.textContent = lives;
+  
+  bricks = [];
+  for (let r = 0; r < BRICK_ROWS; r++) {
+    for (let c = 0; c < BRICK_COLS; c++) {
+      bricks.push({
+        x: 20 + c * BRICK_W,
+        y: 20 + r * (BRICK_H + 5),
+        w: BRICK_W - 4,
+        h: BRICK_H,
+        color: COLORS[r % COLORS.length],
+        alive: true
+      });
+    }
+  }
+}
+
+function createParticles(x, y, color, count = 15) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      dx: (Math.random() - 0.5) * 8,
+      dy: (Math.random() - 0.5) * 8,
+      r: Math.random() * 4 + 2,
+      color,
+      life: 1
+    });
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.dx;
+    p.y += p.dy;
+    p.dy += 0.1;
+    p.life -= 0.02;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawPaddle() {
+  ctx.fillStyle = '#667eea';
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = '#667eea';
+  ctx.beginPath();
+  ctx.roundRect(paddle.x, paddle.y, paddle.w, paddle.h, 8);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function drawBall() {
+  ctx.fillStyle = '#fff';
+  ctx.shadowBlur = 15;
+  ctx.shadowColor = '#fff';
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function drawBricks() {
+  bricks.forEach(b => {
+    if (!b.alive) return;
+    ctx.fillStyle = b.color;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = b.color;
+    ctx.beginPath();
+    ctx.roundRect(b.x, b.y, b.w, b.h, 5);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+}
+
+function moveBall() {
+  ball.x += ball.dx;
+  ball.y += ball.dy;
+
+  if (ball.x - ball.r < 0 || ball.x + ball.r > W) {
+    ball.dx *= -1;
+    createParticles(ball.x, ball.y, '#4d96ff', 5);
+  }
+  if (ball.y - ball.r < 0) {
+    ball.dy *= -1;
+    createParticles(ball.x, ball.y, '#4d96ff', 5);
+  }
+
+  if (ball.y + ball.r > H) {
+    lives--;
+    livesEl.textContent = lives;
+    if (lives <= 0) {
+      gameOver(false);
+      return;
+    }
+    ball.x = W / 2;
+    ball.y = H - 60;
+    ball.dx = 4 * (Math.random() > 0.5 ? 1 : -1);
+    ball.dy = -4;
+  }
+
+  if (ball.y + ball.r >= paddle.y && ball.y - ball.r <= paddle.y + paddle.h &&
+      ball.x >= paddle.x && ball.x <= paddle.x + paddle.w && ball.dy > 0) {
+    const hitPos = (ball.x - paddle.x) / paddle.w;
+    const angle = (hitPos - 0.5) * Math.PI * 0.6;
+    const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+    ball.dx = speed * Math.sin(angle);
+    ball.dy = -speed * Math.cos(angle);
+    createParticles(ball.x, ball.y, '#667eea', 8);
+  }
+
+  bricks.forEach(b => {
+    if (!b.alive) return;
+    if (ball.x + ball.r > b.x && ball.x - ball.r < b.x + b.w &&
+        ball.y + ball.r > b.y && ball.y - ball.r < b.y + b.h) {
+      b.alive = false;
+      ball.dy *= -1;
+      score += 10 * (BRICK_ROWS - Math.floor((b.y - 20) / (BRICK_H + 5)));
+      scoreEl.textContent = score;
+      createParticles(b.x + b.w / 2, b.y + b.h / 2, b.color, 20);
+
+      if (bricks.every(br => !br.alive)) {
+        gameOver(true);
+      }
+    }
+  });
+}
+
+function gameOver(won) {
+  gameRunning = false;
+  cancelAnimationFrame(animationId);
+  
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('breakoutHighScore', highScore);
+    highScoreEl.textContent = highScore;
+  }
+  
+  gameOverTitle.textContent = won ? 'YOU WIN!' : 'GAME OVER';
+  finalScoreEl.textContent = score;
+  gameOverScreen.classList.remove('hidden');
+  
+  window.parent.postMessage({ type: 'gameOver', score, highScore }, '*');
+}
+
+function gameLoop() {
+  if (!gameRunning) return;
+  
+  ctx.clearRect(0, 0, W, H);
+  
+  drawBricks();
+  drawPaddle();
+  drawBall();
+  moveBall();
+  updateParticles();
+  drawParticles();
+  
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function handleMove(clientX) {
+  const rect = canvas.getBoundingClientRect();
+  const x = (clientX - rect.left) * (W / rect.width);
+  paddle.x = Math.max(0, Math.min(W - paddle.w, x - paddle.w / 2));
+}
+
+canvas.addEventListener('mousemove', e => handleMove(e.clientX));
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  handleMove(e.touches[0].clientX);
+}, { passive: false });
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  handleMove(e.touches[0].clientX);
+}, { passive: false });
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  startScreen.classList.add('hidden');
+  init();
+  gameRunning = true;
+  gameLoop();
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+  gameOverScreen.classList.add('hidden');
+  init();
+  gameRunning = true;
+  gameLoop();
+});
+
+// Draw initial state
+init();
+drawBricks();
+drawPaddle();
+drawBall();
+</script>
+</body>
+</html>
